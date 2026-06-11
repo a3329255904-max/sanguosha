@@ -1,0 +1,215 @@
+﻿<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>三国杀斗地主</title>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{--bg:#1a1a2e;--surface:#16213e;--card:#0f3460;--accent:#e94560;--text:#eee;--text2:#aaa;--border:#2a2a4a;--radius:6px}
+html,body{height:100%;background:var(--bg);color:var(--text);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif;font-size:14px}
+body{display:flex;align-items:center;justify-content:center}
+.game{width:900px;max-width:96vw;max-height:98vh;background:var(--surface);border-radius:10px;padding:16px;box-shadow:0 4px 24px rgba(0,0,0,.4)}
+.lobby{text-align:center;padding:40px 0}
+.lobby h1{font-size:24px;margin-bottom:20px;color:var(--accent)}
+.lobby .input-group{display:flex;gap:10px;justify-content:center;margin:12px 0;flex-wrap:wrap}
+.lobby input{background:#0a0a1a;border:1px solid var(--border);padding:10px 14px;border-radius:var(--radius);color:var(--text);width:200px}
+.lobby button,.btn{background:var(--accent);border:none;padding:10px 20px;border-radius:var(--radius);color:#fff;cursor:pointer;font-size:13px;font-weight:600}
+.lobby button:hover{opacity:.85}
+.lobby .room-code{font-size:18px;letter-spacing:4px;font-weight:700;color:#ffd700;margin:12px 0}
+.hero-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:8px;margin:12px 0}
+.hero-card{background:var(--card);border:2px solid transparent;border-radius:var(--radius);padding:10px;cursor:pointer;transition:.15s}
+.hero-card:hover{border-color:var(--accent)}
+.hero-card.selected{border-color:#ffd700;background:#1a2a4a}
+.hero-card.disabled{opacity:.4;cursor:not-allowed}
+.hero-card .name{font-size:15px;font-weight:700}
+.hero-card .title{font-size:11px;color:var(--text2);margin:2px 0}
+.hero-card .info{font-size:11px;color:var(--text2)}
+.hero-card .skill{font-size:11px;color:#8af;margin-top:4px}
+.hero-select-title{text-align:center;margin:12px 0;font-size:15px;color:var(--text2)}
+.game-table{display:flex;flex-direction:column;gap:8px}
+.opponents{display:flex;justify-content:space-around}
+.player-info{text-align:center;padding:8px;background:var(--card);border-radius:var(--radius);min-width:120px}
+.player-info .name{font-size:13px;font-weight:600}
+.player-info .hero{font-size:11px;color:var(--text2)}
+.player-info .hp{font-size:12px;color:#f44}
+.player-info .role{font-size:10px;text-transform:uppercase}
+.player-info .card-count{font-size:11px;color:var(--text2)}
+.your-area{margin-top:8px}
+.your-hero{text-align:center;margin-bottom:6px;font-size:13px}
+.hand{display:flex;flex-wrap:wrap;gap:4px;justify-content:center;min-height:60px;padding:8px;background:#0a0a1a;border-radius:var(--radius)}
+.hand-card{width:44px;height:64px;border-radius:4px;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;cursor:pointer;border:2px solid transparent;transition:.1s}
+.hand-card.red{color:#e44;background:#fff}
+.hand-card.black{color:#222;background:#fff}
+.hand-card.joker{color:#e44;background:#ffe;border-color:#e44}
+.hand-card.selected{border-color:#ffd700;transform:translateY(-8px)}
+.hand-card:hover{border-color:var(--accent)}
+.card-actions{display:flex;gap:6px;justify-content:center;margin-top:6px}
+.logs{height:60px;overflow-y:auto;margin-top:6px;padding:6px;background:#0a0a1a;border-radius:var(--radius);font-size:11px;color:var(--text2)}
+.status-bar{display:flex;justify-content:space-between;align-items:center;margin-top:4px;font-size:12px;color:var(--text2)}
+.got{display:none}
+</style>
+</head>
+<body>
+<div class="game" id="app">
+  <div id="lobby" class="lobby">
+    <h1>三国杀 · 斗地主</h1>
+    <p style="color:var(--text2);margin-bottom:16px">三人联机 · 三台设备对战</p>
+    <div class="input-group">
+      <input type="text" id="playerName" placeholder="输入昵称" value="玩家" maxlength="8">
+    </div>
+    <div class="input-group">
+      <button onclick="createRoom()">创建房间</button>
+    </div>
+    <div class="input-group">
+      <input type="text" id="roomCodeInput" placeholder="输入房间号" maxlength="4">
+      <button onclick="joinRoom()">加入房间</button>
+    </div>
+    <div id="roomInfo" class="got">
+      <div class="room-code" id="roomCodeDisplay"></div>
+      <p id="playerCountDisplay" style="color:var(--text2)"></p>
+      <p id="roomStatusMsg" style="color:var(--text2);margin-top:8px"></p>
+    </div>
+  </div>
+  <div id="heroSelect" class="got">
+    <div class="hero-select-title">请选择武将</div>
+    <div class="hero-grid" id="heroGrid"></div>
+    <p style="text-align:center;color:var(--text2);font-size:12px" id="heroStatus"></p>
+  </div>
+  <div id="gameTable" class="game-table got">
+    <div class="opponents" id="opponents"></div>
+    <div class="your-area">
+      <div class="your-hero" id="myHero"></div>
+      <div class="hand" id="handCards"></div>
+      <div class="card-actions">
+        <button class="btn" onclick="playSelected()">出牌</button>
+        <button class="btn" onclick="endMyTurn()">结束回合</button>
+      </div>
+    </div>
+    <div class="logs" id="gameLogs"></div>
+    <div class="status-bar">
+      <span id="turnIndicator"></span>
+      <span id="deckInfo"></span>
+    </div>
+  </div>
+</div>
+<script>
+let ws = null, playerId = null, myName = '', myHand = [], myHero = null;
+let currentTurnId = null, roomId = null, gamePhase = 'lobby';
+let selectedCards = new Set();
+
+function connect(){
+  const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const host = location.host || 'localhost:3000';
+  ws = new WebSocket(proto + '//' + host);
+  ws.onopen = () => log('已连接服务器');
+  ws.onmessage = (e) => handleMessage(JSON.parse(e.data));
+  ws.onclose = () => log('连接断开');
+  ws.onerror = () => log('连接错误');
+}
+
+function handleMessage(msg){
+  switch(msg.type){
+    case 'connected': playerId = msg.playerId; break;
+    case 'room_created':
+      roomId = msg.roomId; showElement('roomInfo');
+      document.getElementById('roomCodeDisplay').textContent = '房间号: ' + msg.roomId;
+      document.getElementById('playerCountDisplay').textContent = '等待玩家加入 (1/3)...';
+      document.getElementById('roomStatusMsg').textContent = '分享房间号给好友'; break;
+    case 'room_joined':
+      roomId = msg.roomId; showElement('roomInfo');
+      document.getElementById('roomCodeDisplay').textContent = '房间号: ' + msg.roomId; break;
+    case 'player_joined':
+      document.getElementById('playerCountDisplay').textContent = '已加入 ' + msg.playerCount + '/3';
+      log(msg.playerName + ' 加入'); break;
+    case 'game_phase':
+      if(msg.phase==='selecting_heroes'){
+        gamePhase='selecting_heroes'; hideElement('lobby'); showElement('heroSelect');
+        document.getElementById('heroStatus').textContent = '请选择武将...'; } break;
+    case 'hero_list': renderHeroList(msg.heroes); break;
+    case 'hero_selected': myHero = msg.hero; break;
+    case 'game_start':
+      gamePhase='playing'; hideElement('heroSelect'); showElement('gameTable');
+      log('游戏开始！地主: ' + msg.landlord); break;
+    case 'your_hand': myHand = msg.cards; renderHand(); break;
+    case 'your_hero': myHero = msg.hero; break;
+    case 'your_turn': log('轮到你了！'); break;
+    case 'turn_change':
+      currentTurnId = msg.playerId;
+      document.getElementById('turnIndicator').textContent = '回合 ' + msg.round + ' - ' + msg.playerName; break;
+    case 'turn_ended': log(msg.playerName + ' 结束回合'); break;
+    case 'card_played':
+      if(msg.action==='attack') log(msg.playerName + ' 攻击 ' + msg.targetName + ' 造成 ' + msg.damage + ' 伤害');
+      else if(msg.action==='heal') log(msg.playerName + ' 回复 ' + msg.amount + ' 体力');
+      else log(msg.playerName + ' 出牌'); break;
+    case 'player_died': log(msg.playerName + ' 阵亡！'); break;
+    case 'game_state':
+      renderOpponents(msg.players.filter(p => p.id !== playerId));
+      const me = msg.players.find(p => p.id === playerId);
+      if(me && myHero) document.getElementById('myHero').textContent = myHero.name + ' [' + me.hp + '/' + me.maxHp + '] ' + (me.isLandlord?'地主':'农民');
+      document.getElementById('deckInfo').textContent = '剩余牌: ' + msg.deckCount; break;
+    case 'game_over':
+      log('游戏结束！' + (msg.winner==='landlord'?'地主':'农民') + ' 获胜');
+      document.getElementById('turnIndicator').textContent = (msg.winner==='landlord'?'地主':'农民') + ' 获胜'; break;
+    case 'player_disconnected': log(msg.playerName + ' 断开'); break;
+    case 'error': log('错误: ' + msg.msg); break;
+  }
+}
+
+function send(m){ if(ws && ws.readyState===WebSocket.OPEN) ws.send(JSON.stringify(m)); }
+function createRoom(){ myName=document.getElementById('playerName').value.trim()||'玩家'; send({type:'create_room',playerName:myName}); }
+function joinRoom(){ const c=document.getElementById('roomCodeInput').value.trim().toUpperCase(); if(!c)return; myName=document.getElementById('playerName').value.trim()||'玩家'; send({type:'join_room',roomId:c,playerName:myName}); }
+
+function selectHero(heroId){
+  send({type:'select_hero',heroId});
+  document.querySelectorAll('.hero-card').forEach(el => {
+    if(el.dataset.heroId===heroId){ el.classList.add('selected'); el.classList.add('disabled'); }
+    else el.classList.add('disabled');
+  });
+  document.getElementById('heroStatus').textContent = '已选择，等待其他玩家...';
+}
+
+function renderHeroList(heroes){
+  document.getElementById('heroGrid').innerHTML = heroes.map(h =>
+    '<div class="hero-card" data-hero-id="'+h.id+'" onclick="selectHero(\''+h.id+'\')">'+
+    '<div class="name">'+h.name+'</div><div class="title">'+(h.title||'')+'</div>'+
+    '<div class="info">'+(new Array(h.hp).fill('❤').join(''))+' 体力:'+h.hp+'</div>'+
+    '<div class="skill">'+(h.skill||'')+'</div></div>'
+  ).join('');
+}
+
+function renderHand(){
+  document.getElementById('handCards').innerHTML = myHand.map(c => {
+    const cls = (c.color==='red'||c.suit==='joker')?'red':'black';
+    const jokerCls = c.suit==='joker'?' joker':'';
+    return '<div class="hand-card'+(selectedCards.has(c.id)?' selected':'')+' '+cls+jokerCls+'" data-card-id="'+c.id+'" onclick="toggleCard(\''+c.id+'\')">'+c.display+'</div>';
+  }).join('');
+}
+
+function toggleCard(id){ if(selectedCards.has(id)) selectedCards.delete(id); else selectedCards.add(id); renderHand(); }
+function playSelected(){ if(selectedCards.size===0)return; send({type:'play_card',cardIds:Array.from(selectedCards)}); selectedCards.clear(); renderHand(); }
+function endMyTurn(){ send({type:'end_turn'}); selectedCards.clear(); }
+
+function log(msg){
+  const el = document.getElementById('gameLogs');
+  el.innerHTML += '<div>[' + new Date().toLocaleTimeString() + '] ' + msg + '</div>';
+  el.scrollTop = el.scrollHeight;
+}
+
+function renderOpponents(opponents){
+  document.getElementById('opponents').innerHTML = opponents.map(p =>
+    '<div class="player-info"><div class="name">'+p.name+'</div>'+
+    '<div class="hero">'+(p.heroName||'')+'</div>'+
+    '<div class="hp">'+(new Array(Math.max(0,p.hp)).fill('❤').join(''))+(new Array(Math.max(0,p.maxHp-p.hp)).fill('🖤').join(''))+' '+p.hp+'/'+p.maxHp+'</div>'+
+    '<div class="role">'+(p.isLandlord?'地主':'农民')+'</div>'+
+    '<div class="card-count">手牌: '+p.cardCount+'</div></div>'
+  ).join('');
+}
+
+function showElement(id){ document.getElementById(id).classList.remove('got'); }
+function hideElement(id){ document.getElementById(id).classList.add('got'); }
+
+connect();
+</script>
+</body>
+</html>
